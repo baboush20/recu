@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion des Commandes — FCFA (PWA)</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d6efd"/>
+  <style>
+    :root{--primary:#0d6efd;--muted:#6c757d;--bg:#f8f9fa;--card:#fff;--success:#28a745;--danger:#dc3545}
+    *{box-sizing:border-box}body{font-family:Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:#212529;-webkit-font-smoothing:antialiased}
+    .wrap{max-width:1100px;margin:12px auto;padding:12px;display:grid;grid-template-columns:1fr 380px;gap:16px}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    h1{font-size:1.15rem;color:var(--primary);margin:0}
+    .card{background:var(--card);padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06);border:1px solid rgba(13,110,253,0.06)}
+    form{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;align-items:end}
+    .form-group{display:flex;flex-direction:column}
+    label{font-size:0.85rem;color:var(--muted);margin-bottom:6px}
+    input,select{padding:10px;border-radius:8px;border:1px solid #e6e9ee;font-size:0.95rem}
+    .full{grid-column:1/-1}
+    button.primary{background:var(--primary);color:#fff;padding:12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:1rem}
+    .controls{display:flex;gap:8px}
+    button.ghost{background:transparent;border:1px solid rgba(0,0,0,0.06);padding:8px;border-radius:8px}
+    aside .summary{font-size:1.9rem;font-weight:800;color:var(--success);text-align:center;margin:8px 0}
+    ul#liste-commandes{padding:0;margin:0;max-height:420px;overflow:auto}
+    ul#liste-commandes li{list-style:none;padding:10px;border-radius:8px;margin-bottom:10px;border:1px solid #eef2f6;background:#fff;display:flex;flex-direction:column;gap:6px}
+    .order-row{display:flex;gap:8px;align-items:center}
+    .order-meta{font-size:0.88rem;color:var(--muted)}
+    .order-actions{display:flex;gap:8px;margin-top:6px}
+    .btn-small{padding:8px;border-radius:8px;border:none;cursor:pointer;font-size:0.85rem}
+    .btn-delete{background:var(--danger);color:#fff}
+    .btn-view{background:#0ea5e9;color:#fff}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#111;color:#fff;padding:10px 14px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .25s}
+    .toast.show{opacity:0.95;pointer-events:auto}
+    /* responsive */
+    @media (max-width:900px){.wrap{grid-template-columns:1fr;padding:10px} aside{order:2} form{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Gestion des Commandes — FCFA (PWA)</h1>
+      <div class="controls">
+        <button id="btn-export" class="ghost">Exporter CSV</button>
+        <button id="btn-clear" class="ghost" title="Supprimer toutes les commandes">Effacer tout</button>
+      </div>
+    </header>
+
+    <main class="card" role="main">
+      <h2 style="margin-top:0">Nouvelle commande</h2>
+      <form id="form-commande" autocomplete="off">
+        <div class="form-group">
+          <label for="habitat">Type d'habitat</label>
+          <input id="habitat" required>
+        </div>
+        <div class="form-group">
+          <label for="couleur">Couleur</label>
+          <input id="couleur" required>
+        </div>
+        <div class="form-group">
+          <label for="ville">Ville de livraison</label>
+          <input id="ville" required>
+        </div>
+        <div class="form-group">
+          <label for="commune">Commune</label>
+          <input id="commune" required>
+        </div>
+        <div class="form-group">
+          <label for="quartier">Quartier</label>
+          <input id="quartier">
+        </div>
+        <div class="form-group">
+          <label for="paiement">Type de paiement</label>
+          <select id="paiement" required>
+            <option>Mobile Money</option><option>Espèces</option><option>Carte bancaire</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="prix-vente">Prix de vente (FCFA)</label>
+          <input id="prix-vente" type="number" min="0" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label for="prix-livraison">Prix de livraison (FCFA)</label>
+          <input id="prix-livraison" type="number" min="0" step="0.01" required>
+        </div>
+
+        <div class="form-group full">
+          <button class="primary" type="submit">Valider et enregistrer</button>
+        </div>
+      </form>
+
+      <section style="margin-top:12px" class="card">
+        <h3 style="margin:0 0 8px 0">Historique des commandes</h3>
+        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:8px">Accédez aux dernières commandes, supprimez ou partagez.</div>
+        <div style="max-height:260px;overflow:auto">
+          <table id="table-historique" style="width:100%;border-collapse:collapse;font-size:0.9rem">
+            <thead><tr><th style="text-align:left;padding:8px">ID</th><th style="padding:8px">Date</th><th style="padding:8px">Total</th><th style="padding:8px">Actions</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <aside class="card" role="complementary">
+      <h2 style="margin-top:0">Résumé du jour</h2>
+      <div style="font-size:0.9rem;color:var(--muted)">Total aujourd'hui (FCFA)</div>
+      <div id="total-jour" class="summary">0 FCFA</div>
+
+      <h3 style="margin:10px 0 6px 0">Commandes d'aujourd'hui</h3>
+      <ul id="liste-commandes"><li style="list-style:none;color:var(--muted)">Aucune commande pour l'instant.</li></ul>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+// --- Simple wrapper IndexedDB ---
+const dbName = 'ordersDB_v1', storeName='orders';
+
+function openDB(){ return new Promise((res,rej)=>{
+  const req = indexedDB.open(dbName,1);
+  req.onupgradeneeded = e => {
+    const db = e.target.result;
+    if(!db.objectStoreNames.contains(storeName)){
+      db.createObjectStore(storeName,{keyPath:'id'});
+    }
+  };
+  req.onsuccess = e => res(e.target.result);
+  req.onerror = e => rej(e.target.error);
+});}
+
+async function addOrder(order){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(storeName,'readwrite');
+    tx.objectStore(storeName).put(order);
+    tx.oncomplete = ()=> res(true);
+    tx.onerror = ()=> rej(tx.error);
+  });
+}
+
+async function getAllOrders(){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(storeName,'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = ()=> res(req.result || []);
+    req.onerror = ()=> rej(req.error);
+  });
+}
+
+async function deleteOrder(id){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(storeName,'readwrite');
+    tx.objectStore(storeName).delete(id);
+    tx.oncomplete = ()=> res(true);
+    tx.onerror = ()=> rej(tx.error);
+  });
+}
+
+async function clearAll(){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(storeName,'readwrite');
+    tx.objectStore(storeName).clear();
+    tx.oncomplete = ()=> res(true);
+    tx.onerror = ()=> rej(tx.error);
+  });
+}
+
+// --- UI & utils ---
+const fmt = new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2,minimumFractionDigits:0});
+const form = document.getElementById('form-commande');
+const totalEl = document.getElementById('total-jour');
+const listeEl = document.getElementById('liste-commandes');
+const tableBody = document.querySelector('#table-historique tbody');
+const toastEl = document.getElementById('toast');
+const btnExport = document.getElementById('btn-export');
+const btnClear = document.getElementById('btn-clear');
+
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=> toastEl.classList.remove('show'),3000);
+}
+
+// Fallback: localStorage as secondary persistence
+function lsGet(){ try{ return JSON.parse(localStorage.getItem('commandes')||'[]'); }catch{return [];} }
+function lsSet(v){ try{ localStorage.setItem('commandes',JSON.stringify(v)); }catch{} }
+
+async function render(){
+  // Prefer IndexedDB; fallback to localStorage
+  let orders = [];
+  try{ orders = await getAllOrders(); }catch(e){ orders = lsGet(); }
+  // Sort by date asc
+  orders.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  // Update table history (last 50)
+  const recent = orders.slice(-50).reverse();
+  tableBody.innerHTML = '';
+  if(recent.length===0){
+    tableBody.innerHTML = '<tr><td colspan=\"4\" style=\"color:var(--muted);padding:8px\">Aucune commande enregistrée.</td></tr>';
+  } else {
+    recent.forEach(o=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="padding:8px">${o.id.substr(0,10)}</td><td style="padding:8px">${new Date(o.date).toLocaleString('fr-FR')}</td><td style="padding:8px">${fmt.format(Number(o.prixVente)+Number(o.prixLivraison))} FCFA</td><td style="padding:8px"><button class="btn-small btn-view" data-id="${o.id}">Voir</button> <button class="btn-small btn-delete" data-id="${o.id}">Suppr</button></td>`;
+      tableBody.appendChild(tr);
+    });
+  }
+
+  // Update "aujourd'hui"
+  const today = new Date().toISOString().slice(0,10);
+  const todayOrders = orders.filter(o => new Date(o.date).toISOString().slice(0,10)===today);
+  listeEl.innerHTML = '';
+  if(todayOrders.length===0){
+    listeEl.innerHTML = '<li style="list-style:none;color:var(--muted)">Aucune commande pour l\\'instant.</li>';
+  } else {
+    let total = 0;
+    todayOrders.forEach(o=>{
+      const tot = Number(o.prixVente)+Number(o.prixLivraison);
+      total += tot;
+      const li = document.createElement('li');
+      li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>#${o.id.substr(0,8)}</strong><div class="order-meta">${o.habitat} (${o.couleur}) — ${o.ville}, ${o.commune}</div></div><div style="font-weight:700">${fmt.format(tot)} FCFA</div></div><div class="order-actions"><button class="btn-small btn-view" data-id="${o.id}">Voir</button><button class="btn-small btn-delete" data-id="${o.id}">Suppr</button></div>`;
+      listeEl.appendChild(li);
+    });
+    totalEl.textContent = `${fmt.format(total)} FCFA`;
+  }
+}
+
+document.body.addEventListener('click', async (e)=>{
+  const el = e.target;
+  if(el.matches('.btn-delete')){
+    const id = el.getAttribute('data-id');
+    if(!confirm('Confirmer la suppression ?')) return;
+    try{ await deleteOrder(id); // also update localStorage backup
+      const arr = lsGet().filter(x=> x.id !== id); lsSet(arr);
+      showToast('Commande supprimée');
+      render();
+    }catch(err){ showToast('Erreur suppression'); }
+  } else if(el.matches('.btn-view')){
+    const id = el.getAttribute('data-id');
+    // try IndexedDB then localStorage
+    let o=null;
+    try{ const all = await getAllOrders(); o = all.find(x=>x.id===id); }catch(e){ o = lsGet().find(x=>x.id===id); }
+    if(!o){ alert('Commande introuvable'); return; }
+    alert(`Commande ${o.id}\\nDate: ${new Date(o.date).toLocaleString('fr-FR')}\\nHabitat: ${o.habitat} (${o.couleur})\\nLivraison: ${o.ville}, ${o.commune}, ${o.quartier}\\nPaiement: ${o.paiement}\\nPrix Vente: ${fmt.format(o.prixVente)} FCFA\\nPrix Livraison: ${fmt.format(o.prixLivraison)} FCFA\\nTotal: ${fmt.format(Number(o.prixVente)+Number(o.prixLivraison))} FCFA`);
+  }
+});
+
+// Submit handler
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const toNum = v => { if(v==null || v==='') return 0; return Number(String(v).replace(',','.')); };
+  const habitat = document.getElementById('habitat').value.trim();
+  const couleur = document.getElementById('couleur').value.trim();
+  const ville = document.getElementById('ville').value.trim();
+  const commune = document.getElementById('commune').value.trim();
+  const quartier = document.getElementById('quartier').value.trim();
+  const paiement = document.getElementById('paiement').value;
+  const prixVente = toNum(document.getElementById('prix-vente').value);
+  const prixLivraison = toNum(document.getElementById('prix-livraison').value);
+
+  if(!habitat || !couleur || !ville || !commune){ alert('Champs obligatoires manquants'); return; }
+
+  const order = {
+    id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+    date: new Date().toISOString(),
+    habitat,couleur,ville,commune,quartier,paiement,
+    prixVente: Number(prixVente.toFixed(2)), prixLivraison: Number(prixLivraison.toFixed(2))
+  };
+
+  try {
+    await addOrder(order);
+    // update localStorage backup
+    const bak = lsGet(); bak.push(order); lsSet(bak);
+    showToast('Commande enregistrée');
+    form.reset();
+    document.getElementById('habitat').focus();
+    render();
+  } catch(err){
+    // fallback: save to localStorage
+    const bak = lsGet(); bak.push(order); lsSet(bak);
+    showToast('Enregistré en local (fallback)');
+    form.reset();
+    render();
+  }
+});
+
+// Export CSV (works on mobile via Share where supported)
+btnExport.addEventListener('click', async ()=>{
+  let orders=[];
+  try{ orders = await getAllOrders(); }catch(e){ orders = lsGet(); }
+  if(orders.length===0){ alert('Aucune commande à exporter'); return; }
+  const header = ['id','date','habitat','couleur','ville','commune','quartier','paiement','prixVente','prixLivraison','total'];
+  const rows = orders.map(o => {
+    const tot = Number(o.prixVente)+Number(o.prixLivraison);
+    return [o.id,o.date,o.habitat,o.couleur,o.ville,o.commune,o.quartier,o.paiement,o.prixVente.toFixed(2),o.prixLivraison.toFixed(2),tot.toFixed(2)].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv = [header.join(','), ...rows].join('\\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const file = new File([blob],`commandes_${new Date().toISOString().slice(0,10)}.csv`,{type:'text/csv'});
+  // Mobile friendly: use navigator.share if available
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:'Commandes', text:'Export des commandes'}); return; }catch(e){ /* ignore */ }
+  }
+  // Fallback: download link
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+
+// Clear all
+btnClear.addEventListener('click', async ()=>{
+  if(!confirm('Supprimer toutes les commandes ?')) return;
+  try{ await clearAll(); localStorage.removeItem('commandes'); showToast('Toutes les commandes supprimées'); render(); }catch(e){ showToast('Erreur suppression'); }
+});
+
+// Register service worker for PWA (if supported)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(()=>{ console.log('SW registered'); }).catch(()=>console.log('SW failed'));
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
